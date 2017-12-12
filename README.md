@@ -1,6 +1,4 @@
-# East Van Euchre Club Euchre Analytics
-
-Host for East Van Euche [analytics](analytics.html). [Code](analytics.Rmd) also available.
+East Van Euchre [analytics](analytics.html). [Code](analytics.Rmd) also available.
 
 # Details
 
