@@ -1,0 +1,94 @@
+---
+title: "East Van Euchre Club Analytics (December 3, 2017)"
+output: 
+  html_document:
+    self_contained: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load, echo=FALSE}
+# Load and aggregate data 
+library(data.table)
+library(ggplot2)
+library(ggthemes)
+library(ggrepel)
+library(DT) # Sortable table
+
+# Load data
+setwd("~/github//euchre_analytics/")
+raw_data <- fread("Euchre Analytics December 3rd @ Anza - MASTER DATA.csv")
+# Rename variables to something a little more usable
+score.vars.old <- grep("Score: Hand [0-9]+", names(raw_data), value=T)
+score.vars <- gsub("Score: Hand ([0-9]+)?", "score_\\1", score.vars.old)
+setnames(raw_data, score.vars.old, score.vars)
+call.vars.old <- grep("Called: Hand [0-9]+", names(raw_data), value=T)
+call.vars <- gsub("Called: Hand ([0-9]+)?", "hand_\\1", call.vars.old)
+setnames(raw_data, call.vars.old, call.vars)
+# Create variables to split out score, calls, loner calls, and loner wins by hand
+raw_data[, paste0("called_", 1:length(call.vars)):=lapply(.SD, function(x) x=="v" | x == "x"), .SDcols=call.vars] 
+raw_data[, paste0("lonertry_", 1:length(call.vars)):=lapply(.SD, function(x) x=="x"), .SDcols=call.vars]
+for (i in 1:length(call.vars)) {
+  raw_data[, paste0("lonerwin_", i):=get(paste0("lonertry_", i))==TRUE & get(score.vars[i])==4]
+}
+
+# Match in data from opponents to get opponent score by round
+raw_data[`Opponent 1`=="Nat", `Opponent 1`:="Natalie"] # Fix a name inconsistency
+opp_data <- raw_data[, c("Name", "Round", score.vars), with=F]
+setnames(opp_data, score.vars, paste0("opp_", score.vars))
+raw_data2 <- merge(raw_data, opp_data, by.x=c("Opponent 1", "Round"), by.y=c("Name", "Round"))
+
+# Aggregate for each person-round
+raw_data2[, c("total_score"):=rowSums(.SD), .SDcols=score.vars] 
+raw_data2[, c("opp_score"):=rowSums(.SD), .SDcols=paste0("opp_", score.vars)]
+raw_data2[, c("times_called"):=rowSums(.SD), .SDcols=paste0("called_", 1:length(call.vars))]
+raw_data2[, c("times_lonertry"):=rowSums(.SD), .SDcols=paste0("lonertry_", 1:length(call.vars))]
+raw_data2[, c("times_lonerwin"):=rowSums(.SD), .SDcols=paste0("lonerwin_", 1:length(call.vars))]
+
+# Aggregate by person
+agg.vars <- c("total_score", "opp_score", "times_called", "times_lonertry", "times_lonerwin")
+agg_data <- raw_data2[, lapply(.SD, sum),
+                      by=list(name=Name), 
+                      .SDcols=agg.vars]
+```
+
+### Per-person statistics
+
+```{r analysis1, echo=FALSE}
+# Export agg_data tabulation
+agg.labs <- c("Total score", "Opponents' score", "Times called", "Loner attempts", "Loner wins")
+setorder(agg_data, name)
+datatable(agg_data, 
+          rownames=FALSE,
+          colnames=c("Name", agg.labs),
+          options=list(pageLength=nrow(agg_data)))
+```
+
+```{r weirdbug, echo=FALSE}
+rm(.Random.seed) # Fixes a very weird bug related to datatable
+set.seed(1)
+```
+
+### Distributions
+
+```{r analysis2, echo=FALSE}
+agg_data_long <- melt(agg_data, id="name")
+agg_data_long[, variable:=factor(variable, # Generate nice labels
+                                 levels=agg.vars,
+                                 labels=agg.labs)]
+ggplot(agg_data_long, aes(x=value)) + geom_histogram(bins=6) + 
+  facet_wrap(~variable, ncol=2, scales="free_x") + 
+  labs(x=NULL, y=NULL)
+```
+
+
+### Relationship between times called and total score
+
+```{r analysis3, echo=FALSE}
+ggplot(agg_data, aes(y=total_score)) + 
+  geom_label_repel(aes(x=times_called, label=name)) +
+  geom_smooth(method=lm, aes(x=times_called)) + 
+  labs(x="Times called", y="Total score")
+```
