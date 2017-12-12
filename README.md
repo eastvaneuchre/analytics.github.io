@@ -1,7 +1,8 @@
 # East Van Euchre Club Euchre Analytics
 
-## Summary
-Website hosts [analytics](analytics.html) of East Van Euchre club's tournaments. [Code](analytics.Rmd) also available.
+Host for East Van Euche [analytics](analytics.html). [Code](analytics.Rmd) also available.
+
+# Details
 
 ## Input
 Reads in a CSV file (currently [Euchre Analytics December 3rd @ Anza - MASTER DATA.csv](Euchre Analytics December 3rd @ Anza - MASTER DATA.csv)) with tournament statistics and outputs. Relies on the following fields (as named):
