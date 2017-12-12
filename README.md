@@ -4,13 +4,19 @@ East Van Euchre [analytics](analytics.html). [Code](analytics.Rmd) also availabl
 
 # Details
 
-## Input
-Reads in a CSV file (currently [Euchre Analytics December 3rd @ Anza - MASTER DATA.csv](Euchre Analytics December 3rd @ Anza - MASTER DATA.csv)) with tournament statistics and outputs. Relies on the following fields (as named):
+Reads in a CSV file with Euchre tournament data and outputs by-person summary statistics and summary graphs. Relies on the following fields (as named):
 - "Name"
 - "Opponent 1"
 - "Round"
 - "Score: Hand XX", where XX is a number (1-12)
 - "Called: Hand XX", where XX is a number (1-12): Should be "x" or "v"
 
-## Output
-The code prints a table of by-person summary statistics and a series of graphs.
+Saves the following statistics for each person:
+- Points for
+- Points against
+- Calls
+- We euchred
+- We got euchred
+- I got euchred
+- Loner tries
+- Loner wins
