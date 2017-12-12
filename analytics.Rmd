@@ -49,7 +49,7 @@ data3[, opp_called:=opp1_called == TRUE | opp2_called==TRUE]
 data3[, `:=`(weeuchred = score==2 & opp_called==TRUE,
              wegoteuchred = opp_score == 2 & opp_called==FALSE,
              igoteuchred = opp_score == 2 & called == TRUE, 
-             lonerwin = score == 4)]
+             lonerwin = score == 4 & called == TRUE)]
 
 # Aggregate by person
 agg.vars <- c("score", "opp_score", "called", "weeuchred", 
