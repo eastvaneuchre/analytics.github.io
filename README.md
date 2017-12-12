@@ -1,6 +1,6 @@
-# East Van Euchre Club Euchre Analytics
+# East Van Euchre Club analytics
 
-East Van Euchre [analytics](analytics.html). [Code](analytics.Rmd) also available.
+Repository for East Van Euchre [analytics](https://eastvaneuchre.github.io/analytics.github.io/)
 
 # Details
 
