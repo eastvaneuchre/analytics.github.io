@@ -1,5 +1,5 @@
 ---
-title: "East Van Euchre Club Analytics (December 3, 2017) - TESTING"
+title: "East Van Euchre Club Analytics (December 3, 2017)"
 output:
   html_document:
     self_contained: no
