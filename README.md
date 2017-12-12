@@ -1,3 +1,5 @@
+# East Van Euchre Club Euchre Analytics
+
 East Van Euchre [analytics](analytics.html). [Code](analytics.Rmd) also available.
 
 # Details
