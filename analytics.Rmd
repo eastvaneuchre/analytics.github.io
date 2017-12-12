@@ -5,6 +5,8 @@ output:
     self_contained: no
 ---
 
+[Raw data](Euchre%20Analytics%20December%203rd%20%40%20Anza%20-%20MASTER%20DATA.csv) and [code](analytics.Rmd)
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
