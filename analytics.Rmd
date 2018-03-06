@@ -5,6 +5,10 @@ output:
     self_contained: no
 ---
 
+TODO: 
+- Fix Jrock and JRock (set to all lowercase)
+- I think some people are still benefitting from Bye
+
 [Raw data](Euchre%20Analytics%20December%203rd%20%40%20Anza%20-%20MASTER%20DATA.csv) and [code](analytics.Rmd)
 
 ```{r setup, include=FALSE}
@@ -22,61 +26,102 @@ library(DT) # Sortable table
 rm(list=ls())
 # Load data
 setwd("~/github/eastvaneuchre-analytics.github.io/")
-raw_data <- fread("Euchre Analytics December 3rd @ Anza - MASTER DATA.csv")
-# Rename variables to be lowercase, unspace
-score.vars.old <- grep("Score: Hand [0-9]+", names(raw_data), value=T)
-score.vars <- gsub("Score: Hand ([0-9]+)?", "score_\\1", score.vars.old)
-call.vars.old <- grep("Called: Hand [0-9]+", names(raw_data), value=T)
-call.vars <- gsub("Called: Hand ([0-9]+)?", "call_\\1", call.vars.old)
-setnames(raw_data, 
-         c("Name", "Partner", "Opponent 1", "Opponent 2", "Round", call.vars.old, score.vars.old),
-         c("name", "partner", "opp1", "opp2", "round", call.vars, score.vars))
-raw_data2 <- raw_data[, c("name", "partner", "opp1", "opp2", "round", call.vars, score.vars), with=F] # Drop other cols
 
-# Convert to long. Each row is a person-round-hand
-data <- melt(raw_data2, id.vars=c("name", "partner", "opp1", "opp2", "round"), 
-             measure.vars=patterns("call_", "score_"), variable.name="hand", value.name=c("call", "score"))
-data[,`:=`(called=call=="v" | call=="x", lonertry=call=="x", call=NULL)] # Split out calls and loner calls
+fix_names <- function(x) {
+  # Ensure consistency when dealing iwth name problems
+  x[x=="Klore"] <- "KLore"
+  x[x=="Jrock"] <- "JRock"
+  x[x=="Nat"] <- "Natalie"
+  return(x)
+}
 
-# Merge in opponent scores and calls
-data[opp1=="Nat", opp1:="Natalie"] # Fix name inconsistency
-data[opp2=="Nat", opp2:="Natalie"]
-data2 <- merge(data, data[, list(opp1=name, round, hand, opp_score=score, opp1_called=called)], 
-               by=c("opp1", "round", "hand"))
-data3 <- merge(data2, data2[, list(opp2=name, round, hand, opp2_called=called)], 
-               by=c("opp2", "round", "hand"))
-data3[, opp_called:=opp1_called == TRUE | opp2_called==TRUE]
+aggregate_event_data <- function(raw_data) {
+  
+  # TEMP
+  #raw_data <- fread("Euchre Analytics 2018 - MASTER DATA JANUARY 20.csv")
+  
+  # Rename variables to be lowercase, unspace
+  score.vars.old <- grep("Score: Hand [0-9]+", names(raw_data), value=T)
+  score.vars <- gsub("Score: Hand ([0-9]+)?", "score_\\1", score.vars.old)
+  call.vars.old <- grep("Called: Hand [0-9]+", names(raw_data), value=T)
+  call.vars <- gsub("Called: Hand ([0-9]+)?", "call_\\1", call.vars.old)
+  setnames(raw_data, 
+           c("Name", "Partner", "Opponent 1", "Opponent 2", "Round", call.vars.old, score.vars.old),
+           c("name", "partner", "opp1", "opp2", "round", call.vars, score.vars))
+  raw_data2 <- raw_data[, c("name", "partner", "opp1", "opp2", "round", call.vars, score.vars), with=F] # Drop other cols
+  
+  raw_data2 <- raw_data[name!="Bye" & partner!="Bye" & opp1!="Bye" & opp2!="Bye"]
+  
+  # Fix names
+  name.cols <- c("name", "partner", "opp1", "opp2")
+  raw_data2[, c(name.cols):=lapply(.SD, fix_names), .SDcols=name.cols]
+  
+  # Convert to long. Each row is a person-round-hand
+  data <- melt(raw_data2, id.vars=c("name", "partner", "opp1", "opp2", "round"), 
+               measure.vars=patterns("call_", "score_"), variable.name="hand", value.name=c("call", "score"))
+  data[,`:=`(called=call=="v" | call=="x", lonertry=call=="x", call=NULL)] # Split out calls and loner calls
+  
+  # Merge in opponent scores and calls
+  data2 <- merge(data, data[, list(opp1=name, round, hand, opp_score=score, opp1_called=called)], 
+                 by=c("opp1", "round", "hand"))
+  data3 <- merge(data2, data2[, list(opp2=name, round, hand, opp2_called=called)], 
+                 by=c("opp2", "round", "hand"))
+  data3[, opp_called:=opp1_called == TRUE | opp2_called==TRUE]
+  
+  # Compute by-hand statistics
+  data3[, `:=`(weeuchred = score==2 & opp_called==TRUE,
+               wegoteuchred = opp_score == 2 & opp_called==FALSE,
+               igoteuchred = opp_score == 2 & called == TRUE, 
+               lonerwin = score == 4 & called == TRUE)]
+  
+  # Aggregate by person
+  sum.vars <- c("score", "opp_score", "called", "weeuchred", 
+                "wegoteuchred", "igoteuchred", "lonertry", "lonerwin")
+  sum.data <- data3[, lapply(.SD, sum, na.rm=T), by=name, 
+                    .SDcols=sum.vars]
+  setnames(sum.data, sum.vars, paste0(sum.vars, "_sum"))
+  
+  # Get by-hand means of scores
+  mean.vars <- c("score", "opp_score", "called", "weeuchred", 
+                "wegoteuchred", "igoteuchred", "lonertry", "lonerwin")
+  mean.data <- data3[, lapply(.SD, mean, na.rm=T), by=name, .SDcols=mean.vars]
+  setnames(mean.data, mean.vars, paste0(mean.vars, "_hdmn"))
+  
+  # Merge in average partner and opponents' final scores
+  pairings <- rbind(data3[,.N, by=list(name, partner)],
+                    data3[, .N, by=list(name, opp1)],
+                    data3[, .N, by=list(name, opp2)], fill=T)
+  pairings <- merge(pairings, sum.data[, list(partner=name, partner_score=score_sum)], by=c("partner"), all.x=T)
+  pairings <- merge(pairings, sum.data[, list(opp1=name, opp1_score=score_sum)], by=c("opp1"), all.x=T)
+  pairings <- merge(pairings, sum.data[, list(opp2=name, opp2_score=score_sum)], by=c("opp2"), all.x=T)
+  pairings[!is.na(opp1_score), opp_score:=opp1_score]
+  pairings[!is.na(opp2_score), opp_score:=opp2_score]
+  pairings.data <- pairings[, list(avg_partner=round(weighted.mean(partner_score, N, na.rm=T),1),
+                                    avg_opp=round(weighted.mean(opp_score, N, na.rm=T),1)),
+                             by=name]
+  
+  agg_data <- Reduce(function(...) merge(..., by="name", all=T), list(sum.data, mean.data, pairings.data))
+  
+  return(agg_data)
+}
 
-# Compute by-hand statistics
-data3[, `:=`(weeuchred = score==2 & opp_called==TRUE,
-             wegoteuchred = opp_score == 2 & opp_called==FALSE,
-             igoteuchred = opp_score == 2 & called == TRUE, 
-             lonerwin = score == 4 & called == TRUE)]
 
-# Aggregate by person
-agg.vars <- c("score", "opp_score", "called", "weeuchred", 
-              "wegoteuchred", "igoteuchred", "lonertry", "lonerwin")
-agg.labs <- c("Points for", "Points against", "Calls", "We euchred", 
-              "We got euchred", "I got euchred", "Loner tries", "Loner wins")
-agg_data <- data3[, lapply(.SD, sum), by=name, 
-                  .SDcols=agg.vars]
+agg_data_dec3 <- aggregate_event_data(fread("Euchre Analytics December 3rd @ Anza - MASTER DATA.csv"))
+agg_data_jan20 <- aggregate_event_data(fread("Euchre Analytics 2018 - MASTER DATA JANUARY 20.csv"))
 
-# Merge in average partner and opponents' final scores
-pairings <- rbind(data3[,.N, by=list(name, partner)],
-                  data3[, .N, by=list(name, opp1)],
-                  data3[, .N, by=list(name, opp2)], fill=T)
-pairings <- merge(pairings, agg_data[, list(partner=name, partner_score=score)], by=c("partner"), all.x=T)
-pairings <- merge(pairings, agg_data[, list(opp1=name, opp1_score=score)], by=c("opp1"), all.x=T)
-pairings <- merge(pairings, agg_data[, list(opp2=name, opp2_score=score)], by=c("opp2"), all.x=T)
-pairings[!is.na(opp1_score), opp_score:=opp1_score]
-pairings[!is.na(opp2_score), opp_score:=opp2_score]
-pairing_scores <- pairings[, list(avg_partner=round(weighted.mean(partner_score, N, na.rm=T),1),
-                                  avg_opp=round(weighted.mean(opp_score, N, na.rm=T),1)),
-                           by=name]
-agg_data <- merge(agg_data, pairing_scores, by="name")
+agg_data <- rbind(agg_data_dec3, agg_data_jan20)
+agg_data2A <- agg_data[, lapply(.SD, function(x) round(mean(x*12*6, na.rm=T), 1)), by=name,  # Multiple per-hand averages by 12*6
+                      .SDcols=grep("_hdmn", names(agg_data), value=T)]
+agg_data2B <- agg_data[, lapply(.SD, function(x) round(mean(x, na.rm=T), 1)), by=name,
+                      .SDcols=c("avg_partner", "avg_opp")]
+agg_data2 <- merge(agg_data2A, agg_data2B, by="name")
+agg_data2 <- agg_data2[name!="Bye"]
+
 # Add new variables and labels
-agg.vars <- c(agg.vars, "avg_partner", "avg_opp")
-agg.labs <- c(agg.labs, "Partner average", "Opponent average")
+agg.vars <- names(agg_data2)[-1] # Lazy
+agg.labs <- c("Points for", "Points against", "Calls", "We euchred", 
+              "We got euchred", "I got euchred", "Loner tries", "Loner wins", 
+              "Partner average", "Opponent average")
 ```
 
 
@@ -84,8 +129,8 @@ agg.labs <- c(agg.labs, "Partner average", "Opponent average")
 
 ```{r analysis1, echo=FALSE}
 # Export agg_data tabulation
-setorder(agg_data, name)
-datatable(agg_data,
+setorder(agg_data2, name)
+datatable(agg_data2,
           rownames=FALSE,
           colnames=c("Name", agg.labs),
           autoHideNavigation=TRUE,
@@ -100,7 +145,7 @@ rm(.Random.seed) # Fixes a weird bug related to datatable
 ### Distributions
 
 ```{r analysis2, echo=FALSE}
-agg_data_long <- melt(agg_data, id="name")
+agg_data_long <- melt(agg_data2, id="name")
 agg_data_long[, variable:=factor(variable, # Use
                                  levels=agg.vars,
                                  labels=agg.labs)]
@@ -112,31 +157,31 @@ ggplot(agg_data_long, aes(x=value)) + geom_histogram(bins=6) +
 ### Relationship between times called and total score
 
 ```{r analysis3, echo=FALSE}
-ggplot(agg_data, aes(y=score)) +
-  geom_label_repel(aes(x=called, label=name)) +
-  geom_smooth(method=lm, aes(x=called)) +
+ggplot(agg_data2, aes(y=score_hdmn)) +
+  geom_label_repel(aes(x=called_hdmn, label=name)) +
+  geom_smooth(method=lm, aes(x=called_hdmn)) +
   labs(x="Times called", y="Total score")
 ```
 
 
 ### Score over time
-```{r analysis4, echo=FALSE}
-setorder(data3, name, round, hand)
-data3[,score_running:=cumsum(score), by=name]
-data3[, hand:=as.numeric(hand)]
-data3[, time:=(round-1) + (hand)/max(hand)]
-# Fill in 0
-data3.overtime <- rbind(data3, data.table(expand.grid(name=unique(data3$name)), score_running=0, time=0), fill=T)
-setorder(data3.overtime, name, time)
-# Get top 3 finishers
-top3 <- data3.overtime[time==max(time)]
-setorder(top3, -score_running)
-top3 <- top3[1:3]
-ggplot(data3.overtime, aes(x=time, y=score_running, group=name)) + 
-  geom_line() + geom_line(data=data3.overtime[name %in% top3$name], aes(colour=name)) +
-  geom_label_repel(data = top3, aes(label = name, colour=name), nudge_x = -2) +
-  guides(colour=FALSE) +
-  labs(x="Round", y="Score")
+# ```{r analysis4, echo=FALSE}
+# setorder(data3, name, round, hand)
+# data3[,score_running:=cumsum(score), by=name]
+# data3[, hand:=as.numeric(hand)]
+# data3[, time:=(round-1) + (hand)/max(hand)]
+# # Fill in 0
+# data3.overtime <- rbind(data3, data.table(expand.grid(name=unique(data3$name)), score_running=0, time=0), fill=T)
+# setorder(data3.overtime, name, time)
+# # Get top 3 finishers
+# top3 <- data3.overtime[time==max(time)]
+# setorder(top3, -score_running)
+# top3 <- top3[1:3]
+# ggplot(data3.overtime, aes(x=time, y=score_running, group=name)) + 
+#   geom_line() + geom_line(data=data3.overtime[name %in% top3$name], aes(colour=name)) +
+#   geom_label_repel(data = top3, aes(label = name, colour=name), nudge_x = -2) +
+#   guides(colour=FALSE) +
+#   labs(x="Round", y="Score")
 ```
 
 
